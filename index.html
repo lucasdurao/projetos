@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificador de CPF</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #6a11cb, #2575fc);
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            width: 350px;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        input {
+            margin: 10px 0;
+            padding: 12px;
+            width: 90%;
+            text-align: center;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        p {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+        .resultado-sucesso {
+            color: green;
+        }
+        .resultado-erro {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Verificador de CPF</h2>
+        <input type="text" id="cpfBase" maxlength="9" placeholder="Digite os 9 primeiros dígitos" oninput="calcularCPF()">
+        <p id="resultado">Os dígitos verificadores aparecerão aqui</p>
+    </div>
+    
+    <script>
+        function calcularCPF() {
+            let cpfBase = document.getElementById("cpfBase").value;
+            let resultado = document.getElementById("resultado");
+            
+            if (cpfBase.length !== 9 || isNaN(cpfBase)) {
+                resultado.textContent = "Por favor, insira corretamente os 9 primeiros dígitos.";
+                resultado.className = "resultado-erro";
+                return;
+            }
+            
+            let dvCalculado = calcularDigitoVerificador(cpfBase);
+            resultado.textContent = "Os dígitos verificadores são: " + dvCalculado;
+            resultado.className = "resultado-sucesso";
+        }
+        
+        function calcularDigitoVerificador(cpfBase) {
+            let soma = 0;
+            for (let i = 0; i < 9; i++) {
+                soma += parseInt(cpfBase[i]) * (10 - i);
+            }
+            let resto = soma % 11;
+            let primeiroDV = resto < 2 ? 0 : 11 - resto;
+            
+            soma = 0;
+            for (let i = 0; i < 9; i++) {
+                soma += parseInt(cpfBase[i]) * (11 - i);
+            }
+            soma += primeiroDV * 2;
+            resto = soma % 11;
+            let segundoDV = resto < 2 ? 0 : 11 - resto;
+            
+            return `${primeiroDV}${segundoDV}`;
+        }
+    </script>
+</body>
+</html>
