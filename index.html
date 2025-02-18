@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dividir PDF</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f7f7f7;
+    }
+    .container {
+      max-width: 90%;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .pdf-viewer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 60px;
+    }
+    .page-container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .page-thumbnail {
+      border: 2px solid #ddd;
+      transition: transform 0.3s;
+      width: 250px;
+      height: auto;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+    .page-thumbnail:hover {
+      transform: scale(1.2);
+    }
+    .page-number {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .cut-point-container {
+      position: absolute;
+      top: 50%;
+      left: calc(100% + 5px);
+      transform: translateY(-50%);
+    }
+    .cut-point {
+      background: #ff4444;
+      color: white;
+      border: none;
+      font-size: 18px;
+      padding: 10px;
+      cursor: pointer;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .cut-point.active {
+      background: #4CAF50;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal img {
+      max-width: 90%;
+      max-height: 90%;
+    }
+    .file-name-input {
+      margin-top: 20px;
+      padding: 10px;
+      width: 80%;
+      max-width: 400px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    .btn {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 5px;
+      width: 80%;
+      max-width: 200px;
+      margin: 10px auto;
+      display: block;
+    }
+    .btn:hover {
+      background-color: #45a049;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Dividir PDF</h1>
+    
+    <!-- Botão para escolher arquivo sem texto de "Nenhum arquivo escolhido" -->
+    <button class="btn" onclick="document.getElementById('file-input').click()">Escolher Arquivo</button>
+    <input type="file" id="file-input" accept="application/pdf" class="hidden" onchange="updateFileName()">
+    
+    <div id="pdf-container" class="pdf-viewer"></div>
+    <input type="text" id="file-name" class="file-name-input" placeholder="Digite o nome do arquivo">
+    <button onclick="splitPdf()" style="display:none;" id="split-btn" class="btn">Dividir PDF</button>
+  </div>
+
+  <div class="modal" id="zoom-modal" onclick="closeZoom()">
+    <img id="zoom-img" src="">
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+  <script>
+    let pdfDoc = null;
+    let cutPoints = [];
+
+    document.getElementById('file-input').addEventListener('change', async function(event) {
+      const file = event.target.files[0];
+      if (!file || file.type !== "application/pdf") {
+        alert("Selecione um arquivo PDF válido.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const typedArray = new Uint8Array(e.target.result);
+          pdfDoc = await PDFLib.PDFDocument.load(typedArray);
+          renderPdfThumbnails(typedArray);
+        } catch (error) {
+          alert("Erro ao carregar o PDF. Tente novamente.");
+          console.error(error);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    async function renderPdfThumbnails(pdfData) {
+      const loadingTask = pdfjsLib.getDocument(pdfData);
+      const pdf = await loadingTask.promise;
+      const container = document.getElementById('pdf-container');
+      container.innerHTML = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        const pageContainer = document.createElement('div');
+        pageContainer.classList.add('page-container');
+        pageContainer.dataset.pageIndex = i - 1;
+
+        const canvas = document.createElement('canvas');
+        canvas.classList.add('page-thumbnail');
+        canvas.onclick = () => openZoom(canvas.toDataURL());
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: context, viewport }).promise;
+        pageContainer.appendChild(canvas);
+
+        const pageNumber = document.createElement('div');
+        pageNumber.classList.add('page-number');
+        pageNumber.textContent = i;
+        pageContainer.appendChild(pageNumber);
+
+        // Remover a tesoura da última página
+        if (i < pdf.numPages) {
+          const cutContainer = document.createElement('div');
+          cutContainer.classList.add('cut-point-container');
+
+          const cutButton = document.createElement('button');
+          cutButton.classList.add('cut-point');
+          cutButton.innerHTML = '✂';
+          cutButton.setAttribute('aria-label', 'Adicionar ou remover ponto de corte');
+          cutButton.onclick = () => toggleCutPoint(i, cutButton);
+          cutContainer.appendChild(cutButton);
+
+          pageContainer.appendChild(cutContainer);
+        }
+
+        container.appendChild(pageContainer);
+      }
+
+      document.getElementById('split-btn').style.display = 'block';
+    }
+
+    function updateFileName() {
+      const fileName = document.getElementById('file-input').files[0].name;
+      document.getElementById('file-name').value = fileName;
+    }
+
+    function openZoom(dataUrl) {
+      const modal = document.getElementById('zoom-modal');
+      const zoomImg = document.getElementById('zoom-img');
+      zoomImg.src = dataUrl;
+      modal.style.display = 'flex';
+    }
+
+    function closeZoom() {
+      const modal = document.getElementById('zoom-modal');
+      modal.style.display = 'none';
+    }
+
+    function toggleCutPoint(page, button) {
+      const pageIndex = cutPoints.indexOf(page);
+      if (pageIndex === -1) {
+        cutPoints.push(page);
+        button.classList.add('active');
+      } else {
+        cutPoints.splice(pageIndex, 1);
+        button.classList.remove('active');
+      }
+    }
+
+    async function splitPdf() {
+      if (!pdfDoc) {
+        alert("Por favor, carregue um PDF primeiro.");
+        return;
+      }
+
+      if (cutPoints.length === 0) {
+        alert("Por favor, selecione pelo menos um ponto de corte.");
+        return;
+      }
+
+      const fileName = document.getElementById('file-name').value.trim();
+      if (!fileName) {
+        alert("Por favor, insira um nome para o arquivo.");
+        return;
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      const loadedPdf = await PDFLib.PDFDocument.load(pdfBytes);
+      const splitDocs = [];
+
+      const sortedCutPoints = [...cutPoints].sort((a, b) => a - b);
+
+      let startPage = 0;
+      for (let i = 0; i <= sortedCutPoints.length; i++) {
+        const endPage = i < sortedCutPoints.length ? sortedCutPoints[i] : pdfDoc.getPageCount();
+
+        if (endPage > startPage) {
+          const splitDoc = await PDFLib.PDFDocument.create();
+          const pagesToCopy = Array.from({ length: endPage - startPage }, (_, index) => startPage + index);
+          const pages = await splitDoc.copyPages(loadedPdf, pagesToCopy);
+          pages.forEach(page => splitDoc.addPage(page));
+
+          const pdfBytes = await splitDoc.save();
+          splitDocs.push({ bytes: pdfBytes, start: startPage + 1, end: endPage });
+          startPage = endPage;
+        }
+      }
+
+      splitDocs.forEach((pdf, index) => {
+        const blob = new Blob([pdf.bytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${fileName} (${pdf.start} a ${pdf.end}).pdf`;
+        a.click();
+      });
+    }
+  </script>
+</body>
+</html>
