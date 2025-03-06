@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dividir PDF</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='50%' y='60%' font-size='90' text-anchor='middle' alignment-baseline='middle'>✂</text></svg>" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f7f7f7;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+
+    body.dark-theme {
+      background-color: #2c2c2c;
+      color: #f7f7f7;
+    }
+
+    .container {
+      max-width: 90%;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    body.dark-theme .container {
+      background-color: #3c3c3c;
+    }
+
+    .pdf-viewer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 60px;
+    }
+
+    .page-container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .page-thumbnail {
+      border: 2px solid #ddd;
+      width: 150px;
+      height: auto;
+      cursor: pointer;
+      border-radius: 12px;
+      transition: transform 0.3s ease;
+    }
+
+    body.dark-theme .page-thumbnail {
+      border-color: #555;
+    }
+
+    .page-thumbnail:hover {
+      transform: scale(1.1);
+    }
+
+    .page-number {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .cut-point-container {
+      position: absolute;
+      top: 50%;
+      left: calc(100% + 5px);
+      transform: translateY(-50%);
+    }
+
+    .cut-point {
+      background: #b7d7a8;
+      color: #333;
+      border: none;
+      font-size: 18px;
+      padding: 10px;
+      cursor: pointer;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    body.dark-theme .cut-point {
+      background: #c5b7d3;
+    }
+
+    .cut-point.active {
+      background: #91bfb7;
+    }
+
+    body.dark-theme .cut-point.active {
+      background: #5e6272;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal img {
+      max-width: 90%;
+      max-height: 90%;
+    }
+
+    .file-name-input {
+      margin-top: 20px;
+      padding: 10px;
+      width: 80%;
+      max-width: 400px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+
+    body.dark-theme .file-name-input {
+      background-color: #555;
+      border-color: #777;
+      color: #f7f7f7;
+    }
+
+    .btn {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      border-radius: 5px;
+      width: 80%;
+      max-width: 200px;
+      margin: 10px auto;
+      display: block;
+    }
+
+    body.dark-theme .btn {
+      background-color: #444;
+      color: #f7f7f7;
+    }
+
+    .btn:hover {
+      background-color: #45a049;
+    }
+
+    body.dark-theme .btn:hover {
+      background-color: #5c5c5c;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .theme-toggle-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #a0d8ef;
+      color: #333;
+      border: none;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+    }
+
+    body.dark-theme .theme-toggle-btn {
+      background-color: #555;
+      color: #a0d8ef;
+    }
+
+    .download-section {
+      display: none;
+    }
+
+    .download-section .file-card {
+      margin: 20px auto;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      max-width: 100%;
+      text-align: left;
+    }
+
+    body.dark-theme .download-section .file-card {
+      background-color: #555;
+    }
+
+    .download-section .file-card h3 {
+      margin-top: 0;
+    }
+
+    .download-section .file-card input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+      max-width: 580px;
+    }
+
+    body.dark-theme .download-section .file-card input {
+      background-color: #555;
+      border-color: #777;
+      color: #f7f7f7;
+    }
+
+    .download-section .file-card .thumbnails {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 23px;
+      margin-bottom: 20px;
+      
+    }
+
+    .download-section .file-card .thumbnails img {
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      width: 100px;
+      height: auto;
+      cursor: pointer;
+    }
+
+    body.dark-theme .download-section .file-card .thumbnails img {
+      border-color: #555;
+    }
+
+    .download-section .file-card a {
+      display: inline-block;
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      text-decoration: none;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+
+    body.dark-theme .download-section .file-card a {
+      background-color: #444;
+    }
+
+    .download-section .file-card a:hover {
+      background-color: #45a049;
+    }
+
+    body.dark-theme .download-section .file-card a:hover {
+      background-color: #5c5c5c;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="split-section">
+    <h1>Dividir PDF</h1>
+    <div class="btn-container">
+      <button class="btn" onclick="document.getElementById('file-input').click()">Escolher Arquivo</button>
+      <input type="file" id="file-input" accept="application/pdf" class="hidden" onchange="updateFileName()">
+    </div>
+    <div id="pdf-container" class="pdf-viewer"></div>
+    <input type="text" id="file-name" class="file-name-input" placeholder="Digite o nome do arquivo" oninput="removePdfExtension()">
+    <button onclick="splitPdf()" style="display:none;" id="split-btn" class="btn">Dividir e Baixar</button>
+  </div>
+
+  <div class="container download-section" id="download-section">
+    <h1>Baixar Arquivos</h1>
+    <div id="files-container"></div>
+    <button class="btn" onclick="goBackToSplit()">Voltar</button>
+  </div>
+
+  <div class="modal" id="zoom-modal" onclick="closeZoom()">
+    <img id="zoom-img" src="">
+  </div>
+
+  <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()">
+    <span id="theme-icon" class="material-icons">dark_mode</span>
+  </button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+  <script>
+    let pdfDoc = null;
+    let cutPoints = [];
+
+    function toggleTheme() {
+      const body = document.body;
+      const button = document.getElementById('theme-toggle-btn');
+      const themeIcon = document.getElementById('theme-icon');
+      body.classList.toggle('dark-theme');
+      button.classList.toggle('dark-theme');
+
+      if (body.classList.contains('dark-theme')) {
+        themeIcon.textContent = 'light_mode';
+      } else {
+        themeIcon.textContent = 'dark_mode';
+      }
+    }
+
+    document.getElementById('file-input').addEventListener('change', async function(event) {
+      const file = event.target.files[0];
+      if (!file || file.type !== "application/pdf") {
+        alert("Selecione um arquivo PDF válido.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const typedArray = new Uint8Array(e.target.result);
+          pdfDoc = await PDFLib.PDFDocument.load(typedArray);
+          renderPdfThumbnails(typedArray);
+        } catch (error) {
+          alert("Erro ao carregar o PDF. Tente novamente.");
+          console.error(error);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    async function renderPdfThumbnails(pdfData) {
+      const loadingTask = pdfjsLib.getDocument(pdfData);
+      const pdf = await loadingTask.promise;
+      const container = document.getElementById('pdf-container');
+      container.innerHTML = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        const pageContainer = document.createElement('div');
+        pageContainer.classList.add('page-container');
+        pageContainer.dataset.pageIndex = i - 1;
+
+        const canvas = document.createElement('canvas');
+        canvas.classList.add('page-thumbnail');
+        canvas.onclick = () => openZoom(canvas.toDataURL());
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: context, viewport }).promise;
+        pageContainer.appendChild(canvas);
+
+        const pageNumber = document.createElement('div');
+        pageNumber.classList.add('page-number');
+        pageNumber.textContent = i;
+        pageContainer.appendChild(pageNumber);
+
+        if (i < pdf.numPages) {
+          const cutContainer = document.createElement('div');
+          cutContainer.classList.add('cut-point-container');
+
+          const cutButton = document.createElement('button');
+          cutButton.classList.add('cut-point');
+          cutButton.innerHTML = '✂';
+          cutButton.setAttribute('aria-label', 'Adicionar ou remover ponto de corte');
+          cutButton.onclick = () => toggleCutPoint(i, cutButton);
+          cutContainer.appendChild(cutButton);
+
+          pageContainer.appendChild(cutContainer);
+        }
+
+        container.appendChild(pageContainer);
+      }
+
+      document.getElementById('split-btn').style.display = 'block';
+    }
+
+    function updateFileName() {
+      const fileName = document.getElementById('file-input').files[0].name;
+      document.getElementById('file-name').value = fileName.replace(/\.pdf$/, '');
+    }
+
+    function removePdfExtension() {
+      const fileNameInput = document.getElementById('file-name');
+      fileNameInput.value = fileNameInput.value.replace(/\.pdf$/, '');
+    }
+
+    function openZoom(dataUrl) {
+      const modal = document.getElementById('zoom-modal');
+      const zoomImg = document.getElementById('zoom-img');
+      zoomImg.src = dataUrl;
+      modal.style.display = 'flex';
+    }
+
+    function closeZoom() {
+      const modal = document.getElementById('zoom-modal');
+      modal.style.display = 'none';
+    }
+
+    function toggleCutPoint(page, button) {
+      const pageIndex = cutPoints.indexOf(page);
+      if (pageIndex === -1) {
+        cutPoints.push(page);
+        button.classList.add('active');
+      } else {
+        cutPoints.splice(pageIndex, 1);
+        button.classList.remove('active');
+      }
+    }
+
+    async function splitPdf() {
+      if (!pdfDoc) {
+        alert("Por favor, carregue um PDF primeiro.");
+        return;
+      }
+
+      if (cutPoints.length === 0) {
+        alert("Por favor, selecione pelo menos um ponto de corte.");
+        return;
+      }
+
+      const fileName = document.getElementById('file-name').value.trim();
+      if (!fileName) {
+        alert("Por favor, insira um nome para o arquivo.");
+        return;
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      const loadedPdf = await PDFLib.PDFDocument.load(pdfBytes);
+
+      let startPage = 0;
+      let splitDocs = [];
+
+      cutPoints.push(loadedPdf.getPages().length);
+      cutPoints.sort((a, b) => a - b);
+
+      for (let i = 0; i < cutPoints.length; i++) {
+        const endPage = cutPoints[i];
+        if (endPage > startPage) {
+          const newDoc = await PDFLib.PDFDocument.create();
+          const copiedPages = await newDoc.copyPages(loadedPdf, Array.from({ length: endPage - startPage }, (_, idx) => startPage + idx));
+          copiedPages.forEach(page => newDoc.addPage(page));
+
+          const bytes = await newDoc.save();
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+
+          // Renderizar miniaturas das páginas
+          const thumbnails = await renderThumbnailsForSplit(newDoc);
+
+          splitDocs.push({
+            name: `${fileName} - Parte ${i + 1}.pdf`,
+            url: url,
+            thumbnails: thumbnails
+          });
+        }
+
+        startPage = endPage;
+      }
+
+      showDownloadSection(splitDocs);
+    }
+
+    async function renderThumbnailsForSplit(pdfDoc) {
+      const thumbnails = [];
+      const pdfBytes = await pdfDoc.save();
+      const loadingTask = pdfjsLib.getDocument(pdfBytes);
+      const pdf = await loadingTask.promise;
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 0.5 });
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: context, viewport }).promise;
+
+        thumbnails.push(canvas.toDataURL());
+      }
+
+      return thumbnails;
+    }
+
+    function showDownloadSection(splitDocs) {
+      const splitSection = document.getElementById('split-section');
+      const downloadSection = document.getElementById('download-section');
+      const filesContainer = document.getElementById('files-container');
+
+      splitSection.style.display = 'none';
+      downloadSection.style.display = 'block';
+
+      filesContainer.innerHTML = '';
+
+      splitDocs.forEach((file, index) => {
+        const fileCard = document.createElement('div');
+        fileCard.classList.add('file-card');
+
+        const fileNameInput = document.createElement('input');
+        fileNameInput.type = 'text';
+        fileNameInput.value = file.name;
+        fileNameInput.addEventListener('input', (e) => {
+          file.name = e.target.value;
+        });
+
+        const thumbnailsContainer = document.createElement('div');
+        thumbnailsContainer.classList.add('thumbnails');
+        file.thumbnails.forEach((thumbnail, idx) => {
+          const img = document.createElement('img');
+          img.src = thumbnail;
+          img.alt = `Página ${idx + 1}`;
+          img.onclick = () => openZoom(thumbnail); // Zoom nas miniaturas
+          thumbnailsContainer.appendChild(img);
+        });
+
+        const downloadLink = document.createElement('a');
+        downloadLink.href = file.url;
+        downloadLink.download = file.name;
+        downloadLink.textContent = 'Baixar';
+
+        fileCard.appendChild(fileNameInput);
+        fileCard.appendChild(thumbnailsContainer);
+        fileCard.appendChild(downloadLink);
+        filesContainer.appendChild(fileCard);
+      });
+    }
+
+    function goBackToSplit() {
+      const splitSection = document.getElementById('split-section');
+      const downloadSection = document.getElementById('download-section');
+
+      splitSection.style.display = 'block';
+      downloadSection.style.display = 'none';
+    }
+  </script>
+</body>
+</html>
