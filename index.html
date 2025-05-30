@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Corrida</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC0=" crossorigin=""/>
   <style>
     body {
       margin: 0;
@@ -89,7 +90,7 @@
       cursor: not-allowed;
     }
   </style>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCyCC3Uvlc9L8nGHdnNa-COB5x7SVeocfI&libraries=geometry"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1j7kU1wT2mDv4PwNhtBKf38FK1Jxu1G3R3V+zCI8=" crossorigin=""></script>
 </head>
 <body>
   <header>Corrida</header>
@@ -122,111 +123,107 @@
   </div>
 
   <script>
-    let map, watchId, path = [], markers = [], startTime, timer;
-    let distance = 0;
-    let lastPosition = null;
+    let map, pathLine, watchId;
+    let positions = [], startTime, intervalId;
 
     function initMap() {
-      map = new google.maps.Map(document.getElementById("map"), {
-        zoom: 16,
-        center: { lat: -15.7942, lng: -47.8822 },
-      });
+      map = L.map('map').setView([-15.7942, -47.8822], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+      pathLine = L.polyline([], { color: 'orange', weight: 5 }).addTo(map);
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function calculateDistance(coords) {
+      let d = 0;
+      for (let i = 1; i < coords.length; i++) {
+        d += map.distance(coords[i - 1], coords[i]);
+      }
+      return d / 1000;
     }
 
     function updateStats() {
-      const now = new Date();
-      const duration = (now - startTime) / 1000;
-      const minutes = Math.floor(duration / 60);
-      const seconds = Math.floor(duration % 60);
-      document.getElementById("duration").textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-      document.getElementById("distance").textContent = (distance / 1000).toFixed(2);
-      const pace = distance ? (duration / 60) / (distance / 1000) : 0;
-      const paceMin = Math.floor(pace);
-      const paceSec = Math.floor((pace - paceMin) * 60);
-      document.getElementById("pace").textContent = `${paceMin}:${paceSec.toString().padStart(2, '0')} /km`;
+      const now = Date.now();
+      const elapsed = Math.floor((now - startTime) / 1000);
+      const distance = calculateDistance(positions);
+      const pace = distance > 0 ? formatTime(Math.floor(elapsed / distance)) : '0:00';
+      document.getElementById("distance").textContent = distance.toFixed(2);
+      document.getElementById("duration").textContent = formatTime(elapsed);
+      document.getElementById("pace").textContent = pace;
+      if (positions.length >= 2) {
+        const lastSegment = map.distance(positions[positions.length - 2], positions[positions.length - 1]);
+        const timeDiff = 5; // atualizado a cada 5s
+        const segmentPace = lastSegment > 0 ? formatTime(Math.floor(timeDiff / (lastSegment / 1000))) : '--';
+        document.getElementById("currentPace").textContent = segmentPace;
+      }
     }
 
-    function startRun() {
-      if (!navigator.geolocation) {
-        alert("Geolocalização não suportada.");
-        return;
-      }
-
-      startTime = new Date();
-      path = [];
-      distance = 0;
-      lastPosition = null;
-      document.getElementById("stopBtn").disabled = false;
-      document.getElementById("startBtn").disabled = true;
-      document.getElementById("exportBtn").disabled = true;
-      document.getElementById("saveBtn").disabled = true;
-
-      timer = setInterval(updateStats, 1000);
+    function startTracking() {
+      positions = [];
+      startTime = Date.now();
+      intervalId = setInterval(updateStats, 5000);
+      pathLine.setLatLngs([]);
 
       watchId = navigator.geolocation.watchPosition(pos => {
         const { latitude, longitude } = pos.coords;
-        const current = new google.maps.LatLng(latitude, longitude);
-
-        if (!lastPosition) {
-          map.setCenter(current);
-        } else {
-          const segment = google.maps.geometry.spherical.computeDistanceBetween(lastPosition, current);
-          distance += segment;
-        }
-
-        lastPosition = current;
-        path.push(current);
-
-        const polyline = new google.maps.Polyline({
-          path,
-          strokeColor: "#FC5200",
-          strokeOpacity: 1.0,
-          strokeWeight: 3,
-          map
-        });
-
-        markers.push(polyline);
+        const latlng = [latitude, longitude];
+        positions.push(latlng);
+        pathLine.addLatLng(latlng);
+        map.setView(latlng, 16);
       }, err => {
         alert("Erro ao acessar o GPS: " + err.message);
       }, {
         enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 5000
+        maximumAge: 1000
       });
     }
 
-    function stopRun() {
-      clearInterval(timer);
+    function stopTracking() {
+      clearInterval(intervalId);
       navigator.geolocation.clearWatch(watchId);
-      document.getElementById("stopBtn").disabled = true;
-      document.getElementById("exportBtn").disabled = false;
-      document.getElementById("saveBtn").disabled = false;
     }
 
     function exportGPX() {
-      let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Corrida App" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><trkseg>`;
-      path.forEach(p => {
-        gpx += `\n<trkpt lat="${p.lat()}" lon="${p.lng()}" />`;
+      let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Corrida App" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>Corrida</name><trkseg>`;
+      positions.forEach(([lat, lng]) => {
+        gpx += `\n<trkpt lat="${lat}" lon="${lng}"></trkpt>`;
       });
-      gpx += `\n</trkseg></trk></gpx>`;
-      const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+      gpx += `\n</trkseg></trk>\n</gpx>`;
+      const blob = new Blob([gpx], { type: "application/gpx+xml" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = "corrida.gpx";
       a.click();
+      URL.revokeObjectURL(url);
     }
 
-    function saveRun() {
-      alert("Corrida salva localmente.");
-      // Aqui você pode usar localStorage, IndexedDB ou uma API de backend
-    }
+    document.getElementById("startBtn").onclick = () => {
+      startTracking();
+      document.getElementById("startBtn").disabled = true;
+      document.getElementById("stopBtn").disabled = false;
+      document.getElementById("exportBtn").disabled = true;
+      document.getElementById("saveBtn").disabled = false;
+    };
 
-    document.getElementById("startBtn").addEventListener("click", startRun);
-    document.getElementById("stopBtn").addEventListener("click", stopRun);
-    document.getElementById("exportBtn").addEventListener("click", exportGPX);
-    document.getElementById("saveBtn").addEventListener("click", saveRun);
+    document.getElementById("stopBtn").onclick = () => {
+      stopTracking();
+      document.getElementById("startBtn").disabled = false;
+      document.getElementById("stopBtn").disabled = true;
+      document.getElementById("exportBtn").disabled = false;
+    };
+
+    document.getElementById("exportBtn").onclick = exportGPX;
+
+    document.getElementById("saveBtn").onclick = () => {
+      alert("Corrida salva localmente (não implementado ainda).");
+    };
 
     window.onload = initMap;
   </script>
