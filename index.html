@@ -3,82 +3,81 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Registro de Corrida</title>
+  <title>Corrida</title>
   <style>
     body {
       margin: 0;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #ffffff;
-      color: #333;
+      font-family: "Segoe UI", sans-serif;
+      background-color: #fff;
+      color: #222;
     }
 
     header {
       background-color: #fc5200;
-      padding: 1.5rem;
-      color: white;
+      padding: 1rem;
+      color: #fff;
       text-align: center;
-      font-size: 1.5rem;
-      font-weight: bold;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      font-size: 1.25rem;
+      font-weight: 500;
     }
 
     .main {
-      padding: 1.5rem;
-      max-width: 800px;
+      padding: 1rem;
+      max-width: 768px;
       margin: 0 auto;
     }
 
     .stat-card {
       display: flex;
-      justify-content: space-around;
-      align-items: center;
-      background: #f9f9f9;
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.05);
+      justify-content: space-between;
+      background: #f2f2f2;
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 0 5px rgba(0,0,0,0.05);
       flex-wrap: wrap;
     }
 
     .stat-card div {
+      flex: 1 1 45%;
       text-align: center;
-      margin: 0.5rem;
+      margin: 0.5rem 0;
     }
 
     .stat-card h2 {
       margin: 0;
-      font-size: 1.5rem;
+      font-size: 1.4rem;
       color: #fc5200;
     }
 
     .stat-card span {
-      font-size: 0.9rem;
-      color: #777;
+      font-size: 0.85rem;
+      color: #555;
     }
 
     #map {
-      height: 300px;
+      height: 280px;
       width: 100%;
-      border-radius: 12px;
-      margin-bottom: 1.5rem;
+      border-radius: 10px;
+      margin-bottom: 1rem;
     }
 
     .buttons {
       display: flex;
-      justify-content: center;
-      gap: 1rem;
+      justify-content: space-around;
       flex-wrap: wrap;
+      gap: 0.75rem;
     }
 
     button {
-      padding: 0.8rem 1.5rem;
-      font-size: 1rem;
+      padding: 0.7rem 1.2rem;
+      font-size: 0.95rem;
       border: none;
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
-      color: white;
+      color: #fff;
       background-color: #fc5200;
-      transition: background-color 0.3s;
+      transition: 0.3s ease;
     }
 
     button:hover:not(:disabled) {
@@ -86,14 +85,14 @@
     }
 
     button:disabled {
-      background-color: #ccc;
+      background-color: #bbb;
       cursor: not-allowed;
     }
   </style>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCyCC3Uvlc9L8nGHdnNa-COB5x7SVeocfI"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCyCC3Uvlc9L8nGHdnNa-COB5x7SVeocfI&libraries=geometry"></script>
 </head>
 <body>
-  <header>Corrida - Tracker</header>
+  <header>Corrida</header>
   <div class="main">
     <div class="stat-card">
       <div>
@@ -115,13 +114,121 @@
     </div>
     <div id="map"></div>
     <div class="buttons">
-      <button id="startBtn">Iniciar Corrida</button>
-      <button id="stopBtn" disabled>Parar Corrida</button>
+      <button id="startBtn">Iniciar</button>
+      <button id="stopBtn" disabled>Parar</button>
       <button id="exportBtn" disabled>Exportar GPX</button>
-      <button id="saveBtn" disabled>Salvar Corrida</button>
+      <button id="saveBtn" disabled>Salvar</button>
     </div>
   </div>
 
-  <!-- O restante do código JavaScript permanece o mesmo -->
+  <script>
+    let map, watchId, path = [], markers = [], startTime, timer;
+    let distance = 0;
+    let lastPosition = null;
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 16,
+        center: { lat: -15.7942, lng: -47.8822 },
+      });
+    }
+
+    function updateStats() {
+      const now = new Date();
+      const duration = (now - startTime) / 1000;
+      const minutes = Math.floor(duration / 60);
+      const seconds = Math.floor(duration % 60);
+      document.getElementById("duration").textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+      document.getElementById("distance").textContent = (distance / 1000).toFixed(2);
+      const pace = distance ? (duration / 60) / (distance / 1000) : 0;
+      const paceMin = Math.floor(pace);
+      const paceSec = Math.floor((pace - paceMin) * 60);
+      document.getElementById("pace").textContent = `${paceMin}:${paceSec.toString().padStart(2, '0')} /km`;
+    }
+
+    function startRun() {
+      if (!navigator.geolocation) {
+        alert("Geolocalização não suportada.");
+        return;
+      }
+
+      startTime = new Date();
+      path = [];
+      distance = 0;
+      lastPosition = null;
+      document.getElementById("stopBtn").disabled = false;
+      document.getElementById("startBtn").disabled = true;
+      document.getElementById("exportBtn").disabled = true;
+      document.getElementById("saveBtn").disabled = true;
+
+      timer = setInterval(updateStats, 1000);
+
+      watchId = navigator.geolocation.watchPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        const current = new google.maps.LatLng(latitude, longitude);
+
+        if (!lastPosition) {
+          map.setCenter(current);
+        } else {
+          const segment = google.maps.geometry.spherical.computeDistanceBetween(lastPosition, current);
+          distance += segment;
+        }
+
+        lastPosition = current;
+        path.push(current);
+
+        const polyline = new google.maps.Polyline({
+          path,
+          strokeColor: "#FC5200",
+          strokeOpacity: 1.0,
+          strokeWeight: 3,
+          map
+        });
+
+        markers.push(polyline);
+      }, err => {
+        alert("Erro ao acessar o GPS: " + err.message);
+      }, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 5000
+      });
+    }
+
+    function stopRun() {
+      clearInterval(timer);
+      navigator.geolocation.clearWatch(watchId);
+      document.getElementById("stopBtn").disabled = true;
+      document.getElementById("exportBtn").disabled = false;
+      document.getElementById("saveBtn").disabled = false;
+    }
+
+    function exportGPX() {
+      let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Corrida App" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><trkseg>`;
+      path.forEach(p => {
+        gpx += `\n<trkpt lat="${p.lat()}" lon="${p.lng()}" />`;
+      });
+      gpx += `\n</trkseg></trk></gpx>`;
+      const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "corrida.gpx";
+      a.click();
+    }
+
+    function saveRun() {
+      alert("Corrida salva localmente.");
+      // Aqui você pode usar localStorage, IndexedDB ou uma API de backend
+    }
+
+    document.getElementById("startBtn").addEventListener("click", startRun);
+    document.getElementById("stopBtn").addEventListener("click", stopRun);
+    document.getElementById("exportBtn").addEventListener("click", exportGPX);
+    document.getElementById("saveBtn").addEventListener("click", saveRun);
+
+    window.onload = initMap;
+  </script>
 </body>
 </html>
