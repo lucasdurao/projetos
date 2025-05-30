@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Registro de Corrida</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     body {
       margin: 0;
@@ -91,6 +90,7 @@
       cursor: not-allowed;
     }
   </style>
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY"></script>
 </head>
 <body>
   <header>Corrida - Tracker</header>
@@ -118,10 +118,10 @@
       <button id="startBtn">Iniciar Corrida</button>
       <button id="stopBtn" disabled>Parar Corrida</button>
       <button id="exportBtn" disabled>Exportar GPX</button>
+      <button id="saveBtn" disabled>Salvar Corrida</button>
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
     let watchId;
     let startTime;
@@ -135,6 +135,7 @@
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
     const exportBtn = document.getElementById("exportBtn");
+    const saveBtn = document.getElementById("saveBtn");
     const distanceDisplay = document.getElementById("distance");
     const durationDisplay = document.getElementById("duration");
     const paceDisplay = document.getElementById("pace");
@@ -179,11 +180,20 @@
       updateTimer();
       timerInterval = setInterval(updateTimer, 1000);
 
-      map = L.map('map');
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: 'Map data © OpenStreetMap contributors'
-      }).addTo(map);
-      polyline = L.polyline([], { color: 'blue' }).addTo(map);
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 16,
+        center: { lat: 0, lng: 0 },
+        mapTypeId: 'roadmap'
+      });
+
+      polyline = new google.maps.Polyline({
+        path: [],
+        geodesic: true,
+        strokeColor: '#0000FF',
+        strokeOpacity: 1.0,
+        strokeWeight: 3
+      });
+      polyline.setMap(map);
 
       if (navigator.geolocation) {
         watchId = navigator.geolocation.watchPosition(
@@ -192,7 +202,7 @@
             const timestamp = pos.timestamp;
 
             if (!lastPosition) {
-              map.setView([latitude, longitude], 16);
+              map.setCenter({ lat: latitude, lng: longitude });
             } else {
               const d = haversine(lastPosition.latitude, lastPosition.longitude, latitude, longitude);
               const t = (timestamp - lastTimestamp) / 1000; // seconds
@@ -206,7 +216,9 @@
             lastTimestamp = timestamp;
             lastPosition = { latitude, longitude };
             path.push({ time: new Date(timestamp).toISOString(), latitude, longitude });
-            polyline.addLatLng([latitude, longitude]);
+
+            const currentPath = polyline.getPath();
+            currentPath.push(new google.maps.LatLng(latitude, longitude));
           },
           err => alert("Erro ao acessar o GPS: " + err.message),
           { enableHighAccuracy: true }
@@ -218,6 +230,7 @@
       startBtn.disabled = true;
       stopBtn.disabled = false;
       exportBtn.disabled = true;
+      saveBtn.disabled = true;
     }
 
     function stopRun() {
@@ -227,6 +240,7 @@
       startBtn.disabled = false;
       stopBtn.disabled = true;
       exportBtn.disabled = false;
+      saveBtn.disabled = false;
     }
 
     function exportData() {
@@ -247,9 +261,20 @@
       URL.revokeObjectURL(url);
     }
 
+    function saveRun() {
+      const data = {
+        startTime: new Date(startTime).toISOString(),
+        distance: totalDistance.toFixed(2),
+        path: path
+      };
+      localStorage.setItem("ultimaCorrida", JSON.stringify(data));
+      alert("Corrida salva com sucesso!");
+    }
+
     startBtn.addEventListener("click", startRun);
     stopBtn.addEventListener("click", stopRun);
     exportBtn.addEventListener("click", exportData);
+    saveBtn.addEventListener("click", saveRun);
   </script>
 </body>
 </html>
