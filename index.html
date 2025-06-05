@@ -3,229 +3,183 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Corrida</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC0=" crossorigin=""/>
+  <title>Registro de Corrida</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     body {
+      font-family: Arial, sans-serif;
       margin: 0;
-      font-family: "Segoe UI", sans-serif;
-      background-color: #fff;
-      color: #222;
-    }
-
-    header {
-      background-color: #fc5200;
-      padding: 1rem;
-      color: #fff;
-      text-align: center;
-      font-size: 1.25rem;
-      font-weight: 500;
-    }
-
-    .main {
-      padding: 1rem;
-      max-width: 768px;
-      margin: 0 auto;
-    }
-
-    .stat-card {
+      padding: 0;
+      background: #f4f4f4;
       display: flex;
-      justify-content: space-between;
-      background: #f2f2f2;
-      border-radius: 10px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      box-shadow: 0 0 5px rgba(0,0,0,0.05);
-      flex-wrap: wrap;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
     }
 
-    .stat-card div {
-      flex: 1 1 45%;
+    .container {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      width: 90%;
+      max-width: 600px;
       text-align: center;
-      margin: 0.5rem 0;
     }
 
-    .stat-card h2 {
-      margin: 0;
-      font-size: 1.4rem;
-      color: #fc5200;
+    h1 {
+      color: #333;
+      margin-bottom: 1rem;
     }
 
-    .stat-card span {
-      font-size: 0.85rem;
+    button {
+      padding: 1rem;
+      font-size: 1rem;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin: 1rem 0.5rem;
+    }
+
+    button:disabled {
+      background: #ccc;
+    }
+
+    .info {
+      margin-top: 1rem;
+      text-align: left;
       color: #555;
     }
 
     #map {
-      height: 280px;
+      height: 300px;
       width: 100%;
-      border-radius: 10px;
-      margin-bottom: 1rem;
-    }
-
-    .buttons {
-      display: flex;
-      justify-content: space-around;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-    }
-
-    button {
-      padding: 0.7rem 1.2rem;
-      font-size: 0.95rem;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      color: #fff;
-      background-color: #fc5200;
-      transition: 0.3s ease;
-    }
-
-    button:hover:not(:disabled) {
-      background-color: #e04a00;
-    }
-
-    button:disabled {
-      background-color: #bbb;
-      cursor: not-allowed;
+      margin-top: 1rem;
+      border-radius: 8px;
     }
   </style>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-o9N1j7kU1wT2mDv4PwNhtBKf38FK1Jxu1G3R3V+zCI8=" crossorigin=""></script>
 </head>
 <body>
-  <header>Corrida</header>
-  <div class="main">
-    <div class="stat-card">
-      <div>
-        <h2><span id="distance">0</span> km</h2>
-        <span>Distância</span>
-      </div>
-      <div>
-        <h2><span id="duration">0:00</span></h2>
-        <span>Duração</span>
-      </div>
-      <div>
-        <h2><span id="pace">0:00</span> /km</h2>
-        <span>Pace total</span>
-      </div>
-      <div>
-        <h2><span id="currentPace">--</span></h2>
-        <span>Pace parcial</span>
-      </div>
+  <div class="container">
+    <h1>Registro de Corrida</h1>
+    <button id="startBtn">Iniciar Corrida</button>
+    <button id="stopBtn" disabled>Parar Corrida</button>
+    <button id="exportBtn" disabled>Exportar JSON</button>
+    <div class="info">
+      <p><strong>Distância:</strong> <span id="distance">0</span> km</p>
+      <p><strong>Duração:</strong> <span id="duration">0:00</span></p>
     </div>
     <div id="map"></div>
-    <div class="buttons">
-      <button id="startBtn">Iniciar</button>
-      <button id="stopBtn" disabled>Parar</button>
-      <button id="exportBtn" disabled>Exportar GPX</button>
-      <button id="saveBtn" disabled>Salvar</button>
-    </div>
   </div>
 
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    let map, pathLine, watchId;
-    let positions = [], startTime, intervalId;
+    let watchId;
+    let startTime;
+    let totalDistance = 0;
+    let lastPosition = null;
+    let timerInterval;
+    let path = [];
+    let map, polyline;
+    let mapInitialized = false;
 
-    function initMap() {
-      map = L.map('map').setView([-15.7942, -47.8822], 15);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-      pathLine = L.polyline([], { color: 'orange', weight: 5 }).addTo(map);
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const distanceDisplay = document.getElementById("distance");
+    const durationDisplay = document.getElementById("duration");
+
+    function haversine(lat1, lon1, lat2, lon2) {
+      const toRad = x => x * Math.PI / 180;
+      const R = 6371; // km
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
     }
 
-    function formatTime(seconds) {
-      const m = Math.floor(seconds / 60);
-      const s = seconds % 60;
-      return `${m}:${s.toString().padStart(2, '0')}`;
+    function updateTimer() {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      durationDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
 
-    function calculateDistance(coords) {
-      let d = 0;
-      for (let i = 1; i < coords.length; i++) {
-        d += map.distance(coords[i - 1], coords[i]);
-      }
-      return d / 1000;
-    }
-
-    function updateStats() {
-      const now = Date.now();
-      const elapsed = Math.floor((now - startTime) / 1000);
-      const distance = calculateDistance(positions);
-      const pace = distance > 0 ? formatTime(Math.floor(elapsed / distance)) : '0:00';
-      document.getElementById("distance").textContent = distance.toFixed(2);
-      document.getElementById("duration").textContent = formatTime(elapsed);
-      document.getElementById("pace").textContent = pace;
-      if (positions.length >= 2) {
-        const lastSegment = map.distance(positions[positions.length - 2], positions[positions.length - 1]);
-        const timeDiff = 5; // atualizado a cada 5s
-        const segmentPace = lastSegment > 0 ? formatTime(Math.floor(timeDiff / (lastSegment / 1000))) : '--';
-        document.getElementById("currentPace").textContent = segmentPace;
-      }
-    }
-
-    function startTracking() {
-      positions = [];
+    function startRun() {
+      totalDistance = 0;
+      lastPosition = null;
       startTime = Date.now();
-      intervalId = setInterval(updateStats, 5000);
-      pathLine.setLatLngs([]);
+      path = [];
+      updateTimer();
+      timerInterval = setInterval(updateTimer, 1000);
 
-      watchId = navigator.geolocation.watchPosition(pos => {
-        const { latitude, longitude } = pos.coords;
-        const latlng = [latitude, longitude];
-        positions.push(latlng);
-        pathLine.addLatLng(latlng);
-        map.setView(latlng, 16);
-      }, err => {
-        alert("Erro ao acessar o GPS: " + err.message);
-      }, {
-        enableHighAccuracy: true,
-        maximumAge: 1000
-      });
+      map = L.map('map');
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data © OpenStreetMap contributors'
+      }).addTo(map);
+      polyline = L.polyline([], { color: 'blue' }).addTo(map);
+
+      if (navigator.geolocation) {
+        watchId = navigator.geolocation.watchPosition(
+          pos => {
+            const { latitude, longitude } = pos.coords;
+            if (!lastPosition) {
+              map.setView([latitude, longitude], 16);
+            } else {
+              const d = haversine(lastPosition.latitude, lastPosition.longitude, latitude, longitude);
+              totalDistance += d;
+              distanceDisplay.textContent = totalDistance.toFixed(2);
+            }
+            lastPosition = { latitude, longitude };
+            path.push({ time: new Date().toISOString(), latitude, longitude });
+            polyline.addLatLng([latitude, longitude]);
+          },
+          err => alert("Erro ao acessar o GPS: " + err.message),
+          { enableHighAccuracy: true }
+        );
+      } else {
+        alert("Geolocalização não suportada pelo navegador.");
+      }
+
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      exportBtn.disabled = true;
     }
 
-    function stopTracking() {
-      clearInterval(intervalId);
+    function stopRun() {
+      clearInterval(timerInterval);
       navigator.geolocation.clearWatch(watchId);
+
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      exportBtn.disabled = false;
     }
 
-    function exportGPX() {
-      let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Corrida App" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>Corrida</name><trkseg>`;
-      positions.forEach(([lat, lng]) => {
-        gpx += `\n<trkpt lat="${lat}" lon="${lng}"></trkpt>`;
-      });
-      gpx += `\n</trkseg></trk>\n</gpx>`;
-      const blob = new Blob([gpx], { type: "application/gpx+xml" });
+    function exportData() {
+      const data = {
+        startTime: new Date(startTime).toISOString(),
+        duration: durationDisplay.textContent,
+        distance: totalDistance.toFixed(2),
+        path: path
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "corrida.gpx";
+      a.download = "corrida.json";
       a.click();
       URL.revokeObjectURL(url);
     }
 
-    document.getElementById("startBtn").onclick = () => {
-      startTracking();
-      document.getElementById("startBtn").disabled = true;
-      document.getElementById("stopBtn").disabled = false;
-      document.getElementById("exportBtn").disabled = true;
-      document.getElementById("saveBtn").disabled = false;
-    };
-
-    document.getElementById("stopBtn").onclick = () => {
-      stopTracking();
-      document.getElementById("startBtn").disabled = false;
-      document.getElementById("stopBtn").disabled = true;
-      document.getElementById("exportBtn").disabled = false;
-    };
-
-    document.getElementById("exportBtn").onclick = exportGPX;
-
-    document.getElementById("saveBtn").onclick = () => {
-      alert("Corrida salva localmente (não implementado ainda).");
-    };
-
-    window.onload = initMap;
+    startBtn.addEventListener("click", startRun);
+    stopBtn.addEventListener("click", stopRun);
+    exportBtn.addEventListener("click", exportData);
   </script>
 </body>
 </html>
