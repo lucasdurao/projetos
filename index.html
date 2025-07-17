@@ -1,185 +1,399 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Registro de Corrida</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <title>Dividir PDF</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='50%' y='60%' font-size='90' text-anchor='middle' alignment-baseline='middle'>✂</text></svg>" type="image/svg+xml">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f4f4f4;
+      text-align: center;
+      background-color: #f7f7f7;
+      color: #333;
+    }
+    body.dark-theme {
+      background-color: #2c2c2c;
+      color: #f7f7f7;
+    }
+    .container {
+      max-width: 90%;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    body.dark-theme .container {
+      background-color: #3c3c3c;
+    }
+    .pdf-viewer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 60px;
+    }
+    .page-container {
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      min-height: 100vh;
+      margin-bottom: 20px;
     }
-
-    .container {
-      background: white;
-      padding: 2rem;
+    .page-thumbnail {
+      border: 2px solid #ddd;
+      width: 150px;
+      height: auto;
+      cursor: pointer;
       border-radius: 12px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      width: 90%;
-      max-width: 600px;
-      text-align: center;
+      transition: transform 0.3s ease;
     }
-
-    h1 {
+    body.dark-theme .page-thumbnail {
+      border-color: #555;
+    }
+    .page-thumbnail:hover {
+      transform: scale(1.1);
+    }
+    .page-number {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .cut-point-container {
+      position: absolute;
+      top: 50%;
+      left: calc(100% + 5px);
+      transform: translateY(-50%);
+    }
+    .cut-point {
+      background: #b7d7a8;
       color: #333;
-      margin-bottom: 1rem;
+      border: none;
+      font-size: 18px;
+      padding: 10px;
+      cursor: pointer;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
     }
-
-    button {
-      padding: 1rem;
-      font-size: 1rem;
-      background: #4CAF50;
+    body.dark-theme .cut-point {
+      background: #c5b7d3;
+    }
+    .cut-point.active {
+      background: #91bfb7;
+    }
+    body.dark-theme .cut-point.active {
+      background: #5e6272;
+    }
+    .delete-btn {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background-color: #ffb6b6;
+      color: #333;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      cursor: pointer;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    body.dark-theme .delete-btn {
+      background-color: #d87c7c;
+      color: #f7f7f7;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal img {
+      max-width: 90%;
+      max-height: 90%;
+    }
+    .file-name-input {
+      margin-top: 20px;
+      padding: 10px;
+      width: 80%;
+      max-width: 400px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    body.dark-theme .file-name-input {
+      background-color: #555;
+      border-color: #777;
+      color: #f7f7f7;
+    }
+    .btn {
+      background-color: #4CAF50;
       color: white;
       border: none;
-      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 16px;
       cursor: pointer;
-      margin: 1rem 0.5rem;
+      border-radius: 5px;
+      width: 80%;
+      max-width: 200px;
+      margin: 10px auto;
+      display: block;
     }
-
-    button:disabled {
-      background: #ccc;
+    body.dark-theme .btn {
+      background-color: #444;
+      color: #f7f7f7;
     }
-
-    .info {
-      margin-top: 1rem;
-      text-align: left;
-      color: #555;
+    .btn:hover {
+      background-color: #45a049;
     }
-
-    #map {
-      height: 300px;
-      width: 100%;
-      margin-top: 1rem;
-      border-radius: 8px;
+    body.dark-theme .btn:hover {
+      background-color: #5c5c5c;
+    }
+    .hidden {
+      display: none;
+    }
+    .theme-toggle-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #a0d8ef;
+      color: #333;
+      border: none;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+    }
+    body.dark-theme .theme-toggle-btn {
+      background-color: #555;
+      color: #a0d8ef;
+    }
+    .btn-container {
+      margin: 20px 0;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Registro de Corrida</h1>
-    <button id="startBtn">Iniciar Corrida</button>
-    <button id="stopBtn" disabled>Parar Corrida</button>
-    <button id="exportBtn" disabled>Exportar JSON</button>
-    <div class="info">
-      <p><strong>Distância:</strong> <span id="distance">0</span> km</p>
-      <p><strong>Duração:</strong> <span id="duration">0:00</span></p>
+    <h1>Dividir PDF</h1>
+    <div class="btn-container">
+      <button class="btn" onclick="document.getElementById('file-input').click()">Escolher Arquivo</button>
+      <input type="file" id="file-input" accept="application/pdf" class="hidden" onchange="updateFileName()">
+      <button class="btn" onclick="resetCutPoints()">Limpar Cortes</button>
     </div>
-    <div id="map"></div>
+    <div id="pdf-container" class="pdf-viewer"></div>
+    <input type="text" id="file-name" class="file-name-input" placeholder="Digite o nome do arquivo" oninput="removePdfExtension()">
+    <button onclick="splitPdf()" style="display:none;" id="split-btn" class="btn">Baixar arquivos</button>
   </div>
-
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <div class="modal" id="zoom-modal" onclick="closeZoom()">
+    <img id="zoom-img" src="">
+  </div>
+  <button class="theme-toggle-btn" id="theme-toggle-btn" onclick="toggleTheme()">
+    <span id="theme-icon" class="material-icons">dark_mode</span>
+  </button>
   <script>
-    let watchId;
-    let startTime;
-    let totalDistance = 0;
-    let lastPosition = null;
-    let timerInterval;
-    let path = [];
-    let map, polyline;
-    let mapInitialized = false;
+    let pdfDoc = null;
+    let cutPoints = [];
+    let deletedPages = [];
 
-    const startBtn = document.getElementById("startBtn");
-    const stopBtn = document.getElementById("stopBtn");
-    const exportBtn = document.getElementById("exportBtn");
-    const distanceDisplay = document.getElementById("distance");
-    const durationDisplay = document.getElementById("duration");
-
-    function haversine(lat1, lon1, lat2, lon2) {
-      const toRad = x => x * Math.PI / 180;
-      const R = 6371; // km
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
+    function toggleTheme() {
+      const body = document.body;
+      const themeIcon = document.getElementById('theme-icon');
+      body.classList.toggle('dark-theme');
+      themeIcon.textContent = body.classList.contains('dark-theme') ? 'light_mode' : 'dark_mode';
     }
 
-    function updateTimer() {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      const minutes = Math.floor(elapsed / 60);
-      const seconds = elapsed % 60;
-      durationDisplay.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    function resetCutPoints() {
+      cutPoints = [];
+      document.querySelectorAll('.cut-point.active').forEach(btn => btn.classList.remove('active'));
     }
 
-    function startRun() {
-      totalDistance = 0;
-      lastPosition = null;
-      startTime = Date.now();
-      path = [];
-      updateTimer();
-      timerInterval = setInterval(updateTimer, 1000);
+    function updateFileName() {
+      const fileName = document.getElementById('file-input').files[0].name;
+      document.getElementById('file-name').value = fileName.replace(/\.pdf$/, '');
+    }
 
-      map = L.map('map');
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: 'Map data © OpenStreetMap contributors'
-      }).addTo(map);
-      polyline = L.polyline([], { color: 'blue' }).addTo(map);
+    function removePdfExtension() {
+      const fileNameInput = document.getElementById('file-name');
+      fileNameInput.value = fileNameInput.value.replace(/\.pdf$/, '');
+    }
 
-      if (navigator.geolocation) {
-        watchId = navigator.geolocation.watchPosition(
-          pos => {
-            const { latitude, longitude } = pos.coords;
-            if (!lastPosition) {
-              map.setView([latitude, longitude], 16);
-            } else {
-              const d = haversine(lastPosition.latitude, lastPosition.longitude, latitude, longitude);
-              totalDistance += d;
-              distanceDisplay.textContent = totalDistance.toFixed(2);
-            }
-            lastPosition = { latitude, longitude };
-            path.push({ time: new Date().toISOString(), latitude, longitude });
-            polyline.addLatLng([latitude, longitude]);
-          },
-          err => alert("Erro ao acessar o GPS: " + err.message),
-          { enableHighAccuracy: true }
-        );
+    function openZoom(dataUrl) {
+      const modal = document.getElementById('zoom-modal');
+      const zoomImg = document.getElementById('zoom-img');
+      zoomImg.src = dataUrl;
+      modal.style.display = 'flex';
+    }
+
+    function closeZoom() {
+      document.getElementById('zoom-modal').style.display = 'none';
+    }
+
+    function toggleCutPoint(page, button) {
+      const index = cutPoints.indexOf(page);
+      if (index === -1) {
+        cutPoints.push(page);
+        button.classList.add('active');
       } else {
-        alert("Geolocalização não suportada pelo navegador.");
+        cutPoints.splice(index, 1);
+        button.classList.remove('active');
+      }
+    }
+
+    function deletePage(pageIndex, container) {
+      deletedPages.push(pageIndex);
+      container.remove();
+    }
+
+    document.getElementById('file-input').addEventListener('change', async function(event) {
+      const file = event.target.files[0];
+      if (!file || (!file.type.includes("pdf") && !file.name.endsWith(".pdf"))) {
+        alert("Selecione um arquivo PDF válido.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const typedArray = new Uint8Array(e.target.result);
+          pdfDoc = await PDFLib.PDFDocument.load(typedArray);
+          renderPdfThumbnails(typedArray);
+        } catch (error) {
+          alert("Erro ao carregar o PDF. Tente novamente.");
+          console.error("Erro:", error.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    async function renderPdfThumbnails(pdfData) {
+      const loadingTask = pdfjsLib.getDocument(pdfData);
+      const pdf = await loadingTask.promise;
+      const container = document.getElementById('pdf-container');
+      container.innerHTML = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        const pageContainer = document.createElement('div');
+        pageContainer.classList.add('page-container');
+        pageContainer.dataset.pageIndex = i - 1;
+
+        const canvas = document.createElement('canvas');
+        canvas.classList.add('page-thumbnail');
+        canvas.onclick = () => openZoom(canvas.toDataURL());
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: context, viewport }).promise;
+        pageContainer.appendChild(canvas);
+
+        const pageNumber = document.createElement('div');
+        pageNumber.classList.add('page-number');
+        pageNumber.textContent = i;
+        pageContainer.appendChild(pageNumber);
+
+        if (i < pdf.numPages) {
+          const cutContainer = document.createElement('div');
+          cutContainer.classList.add('cut-point-container');
+
+          const cutButton = document.createElement('button');
+          cutButton.classList.add('cut-point');
+          cutButton.setAttribute('aria-label', 'Adicionar ou remover ponto de corte');
+          cutButton.setAttribute('title', 'Clique para adicionar/remover ponto de corte');
+          cutButton.innerHTML = '✂';
+          cutButton.onclick = () => toggleCutPoint(i, cutButton);
+          cutContainer.appendChild(cutButton);
+
+          pageContainer.appendChild(cutContainer);
+        }
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.classList.add('delete-btn');
+        deleteBtn.innerHTML = '<span class="material-icons">delete</span>';
+        deleteBtn.title = 'Excluir página';
+        deleteBtn.onclick = () => deletePage(i - 1, pageContainer);
+        pageContainer.appendChild(deleteBtn);
+
+        container.appendChild(pageContainer);
       }
 
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-      exportBtn.disabled = true;
+      document.getElementById('split-btn').style.display = 'block';
     }
 
-    function stopRun() {
-      clearInterval(timerInterval);
-      navigator.geolocation.clearWatch(watchId);
+    async function splitPdf() {
+      if (!pdfDoc) {
+        alert("Por favor, carregue um PDF primeiro.");
+        return;
+      }
+      if (cutPoints.length === 0 && deletedPages.length === 0) {
+        alert("Por favor, selecione pelo menos um ponto de corte ou exclua alguma página.");
+        return;
+      }
+      const fileName = document.getElementById('file-name').value.trim();
+      if (!fileName) {
+        alert("Por favor, insira um nome para o arquivo.");
+        return;
+      }
 
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      exportBtn.disabled = false;
+      const pdfBytes = await pdfDoc.save();
+      const loadedPdf = await PDFLib.PDFDocument.load(pdfBytes);
+
+      cutPoints.push(loadedPdf.getPages().length);
+      cutPoints = [...new Set(cutPoints)].sort((a, b) => a - b);
+
+      let startPage = 0;
+      let splitDocs = [];
+
+      for (let i = 0; i < cutPoints.length; i++) {
+        const endPage = cutPoints[i];
+        const validPages = Array.from({ length: endPage - startPage }, (_, idx) => startPage + idx)
+          .filter(p => !deletedPages.includes(p));
+
+        if (validPages.length > 0) {
+          const newDoc = await PDFLib.PDFDocument.create();
+          const copiedPages = await newDoc.copyPages(loadedPdf, validPages);
+          copiedPages.forEach(page => newDoc.addPage(page));
+          splitDocs.push({ start: validPages[0] + 1, end: validPages.at(-1) + 1, bytes: await newDoc.save() });
+        }
+        startPage = endPage;
+      }
+
+      splitDocs.forEach((splitDoc, index) => {
+        const blob = new Blob([splitDoc.bytes], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `${fileName} - Parte ${index + 1}.pdf`;
+        link.click();
+      });
     }
-
-    function exportData() {
-      const data = {
-        startTime: new Date(startTime).toISOString(),
-        duration: durationDisplay.textContent,
-        distance: totalDistance.toFixed(2),
-        path: path
-      };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "corrida.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    startBtn.addEventListener("click", startRun);
-    stopBtn.addEventListener("click", stopRun);
-    exportBtn.addEventListener("click", exportData);
   </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
 </body>
 </html>
