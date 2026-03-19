@@ -388,7 +388,7 @@
         const blob = new Blob([splitDoc.bytes], { type: 'application/pdf' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `${fileName} - Parte ${index + 1}.pdf`;
+        link.download = `${fileName} - ${index + 1}.pdf`;
         link.click();
       });
     }
